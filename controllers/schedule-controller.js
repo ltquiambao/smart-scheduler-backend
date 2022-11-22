@@ -22,6 +22,13 @@ const getSchedule = (req, res) => {
   console.log("[getSchedule] schedule data sent");
 };
 
+const createEvent = (req, res) => {
+  console.log("[createEvent] create a new event requested");
+  // logic here
+  console.log(req.body);
+  console.log("[createEvent] new event created");
+};
+
 const automateSchedule = (req, res) => {
   console.log("[automateSchedule] automate schedule data requested")[
     // Schedule data
@@ -228,4 +235,4 @@ const automateSchedule = (req, res) => {
   console.log("[automateSchedule] automate schedule data sent");
 };
 
-module.exports = { getSchedule, automateSchedule };
+module.exports = { getSchedule, automateSchedule, createEvent };

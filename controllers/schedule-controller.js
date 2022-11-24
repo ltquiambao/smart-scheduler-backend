@@ -1,25 +1,78 @@
-const getSchedule = (req, res) => {
+const { google } = require("googleapis");
+const { oauth2Client } = require("./auth-controller");
+
+const getSchedule = async (req, res) => {
   console.log("[getSchedule] schedule data requested");
-  const scheduleData = [
-    {
-      Id: 1,
-      Subject: "Explosion of Betelgeuse Star",
-      Location: "Space Center USA",
-      StartTime: "2022-11-15T04:00:00.000Z",
-      EndTime: "2022-11-15T05:30:00.000Z",
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const response = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: new Date().toISOString(),
+    maxResults: 10,
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+  const events = response.data.items;
+  const mappedEvents = events.map((event, i) => {
+    // const start = event.start.dateTime || event.start.date;
+    return {
+      Id: event?.id,
+      Subject: event?.summary,
+      Location: null,
+      StartTime: event?.start?.dateTime,
+      EndTime: event?.end?.dateTime,
       CategoryColor: "#1aaa55",
-    },
-    {
-      Id: 2,
-      Subject: "Thule Air Crash Report",
-      Location: "Newyork City",
-      StartTime: "2022-11-16T06:30:00.000Z",
-      EndTime: "2022-11-16T08:30:00.000Z",
-      CategoryColor: "#357cd2",
-    },
-  ];
-  res.json(scheduleData);
+    };
+  });
+  res.json(mappedEvents);
+  // const scheduleData = [
+  //   {
+  //     Id: 1,
+  //     Subject: "Explosion of Betelgeuse Star",
+  //     Location: "Space Center USA",
+  //     StartTime: "2022-11-15T04:00:00.000Z",
+  //     EndTime: "2022-11-15T05:30:00.000Z",
+  //     CategoryColor: "#1aaa55",
+  //   },
+  //   {
+  //     Id: 2,
+  //     Subject: "Thule Air Crash Report",
+  //     Location: "Newyork City",
+  //     StartTime: "2022-11-16T06:30:00.000Z",
+  //     EndTime: "2022-11-16T08:30:00.000Z",
+  //     CategoryColor: "#357cd2",
+  //   },
+  // ];
+  // res.json(scheduleData);
   console.log("[getSchedule] schedule data sent");
+};
+
+const getGoogleEvents = async (req, res) => {
+  const calendar = google.calendar({ version: "v3", auth: oauth2Client });
+  const response = await calendar.events.list({
+    calendarId: "primary",
+    timeMin: new Date().toISOString(),
+    maxResults: 10,
+    singleEvents: true,
+    orderBy: "startTime",
+  });
+  const events = response.data.items;
+  if (!events || events.length === 0) {
+    console.log("No upcoming events found.");
+    return;
+  }
+  console.log("Upcoming 10 events:");
+  events.map((event, i) => {
+    const start = event.start.dateTime || event.start.date;
+    console.log(event);
+  });
+  res.json(events);
+};
+
+const createEvent = (req, res) => {
+  console.log("[createEvent] create a new event requested");
+  // logic here
+  console.log(req.body);
+  console.log("[createEvent] new event created");
 };
 
 const automateSchedule = (req, res) => {
@@ -228,4 +281,9 @@ const automateSchedule = (req, res) => {
   console.log("[automateSchedule] automate schedule data sent");
 };
 
-module.exports = { getSchedule, automateSchedule };
+module.exports = {
+  getSchedule,
+  automateSchedule,
+  createEvent,
+  getGoogleEvents,
+};

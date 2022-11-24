@@ -14,7 +14,7 @@ const connectDB = require("./db/connect.js");
 
 // routers
 const authRouter = require("./routes/auth-routes.js");
-const scheduleRouter = require("./routes/schedule-routes.js")
+const scheduleRouter = require("./routes/schedule-routes.js");
 
 // middleware
 const notFoundMiddleware = require("./middleware/not-found.js");

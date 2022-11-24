@@ -10,17 +10,26 @@ const router = express.Router();
 
 const {
   register,
+  registerWithGoogle,
   login,
+  oauthCallback,
   // updateUser
 } = require("../controllers/auth-controller.js");
-// import authenticateUser from "../middleware/auth.js";
 router.route("/register").post(
   // apiLimiter,
   register
 );
+router.route("/register/google").post(
+  // apiLimiter,
+  registerWithGoogle
+);
 router.route("/login").post(
   // apiLimiter,
   login
+);
+router.route("/oauth2callback").get(
+  // apiLimiter,
+  oauthCallback
 );
 // router.route("/updateUser").patch(authenticateUser, updateUser);
 

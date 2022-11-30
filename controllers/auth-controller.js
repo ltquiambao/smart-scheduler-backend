@@ -66,7 +66,7 @@ const verifyGoogleToken = async (token) => {
   }
 };
 
-const generateAuthUrl = () => {
+const generateAuthUrl = ({ email }) => {
   // generate a url that asks permissions for Google Calendar scopes
   const scopes = ["https://www.googleapis.com/auth/calendar"];
 
@@ -74,6 +74,7 @@ const generateAuthUrl = () => {
     // 'online' (default) or 'offline' (gets refresh_token)
     // If you only need one scope you can pass it as a string
     scope: scopes,
+    login_hint: email,
   });
 
   return url;
@@ -92,7 +93,7 @@ const registerWithGoogle = async (req, res) => {
 
     // DB.push(profile);
     console.log(profile);
-    const authUrl = generateAuthUrl();
+    const authUrl = generateAuthUrl({ email: profile?.email });
 
     res.status(StatusCodes.CREATED).json({
       message: "Signup was successful",
@@ -116,8 +117,13 @@ const oauthCallback = async (req, res) => {
   // Save these somewhere safe so they can be used at a later time.
   const { code } = req.query;
   console.log(req.query);
+  console.log(`[oauthCallback] code passed by the request: ${code}`);
   const { tokens } = await oauth2Client.getToken(code);
+  console.log(`[oauthCallback] Oauth2 token generated:`);
+  console.log(tokens);
   oauth2Client.setCredentials(tokens);
+  console.log(`[oauthCallback] OAuth2 client credentials set with a token`);
+  res.redirect("http://localhost:3000/calendar");
 };
 
 const login = async (req, res) => {

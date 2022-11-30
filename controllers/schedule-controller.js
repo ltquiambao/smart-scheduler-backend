@@ -181,13 +181,6 @@ const createEvent = (req, res) => {
   res.status(StatusCodes.CREATED).json({ message: "event created" });
 };
 
-const createEvent = (req, res) => {
-  console.log("[createEvent] create a new event requested");
-  // logic here
-  console.log(req.body);
-  console.log("[createEvent] new event created");
-};
-
 const automateSchedule = (req, res) => {
   console.log("[automateSchedule] automate schedule data requested")[
     // Schedule data

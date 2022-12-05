@@ -1,20 +1,28 @@
 const { google } = require("googleapis");
-const { oauth2Client } = require("./auth-controller");
+
 const { StatusCodes } = require("http-status-codes");
 const { DateTime, Duration } = require("luxon");
+const GoogleApiClient = require("./google-api-controller");
+const { oauth2Client } = require("./auth-controller");
+const Scheduler = require("./Scheduler.js");
 
 const getSchedule = async (req, res) => {
   console.log("[getSchedule] schedule data requested");
+  //
+  const now = DateTime.now();
+  const minusOneMonth = DateTime.now().minus({ month: 1 });
+  const plusOneMonth = DateTime.now().plus({ month: 1 });
   try {
     const calendar = google.calendar({ version: "v3", auth: oauth2Client });
     const response = await calendar.events.list({
       calendarId: "primary",
-      timeMin: new Date().toISOString(),
-      maxResults: 10,
+      timeMin: minusOneMonth.toISO(),
+      timeMax: plusOneMonth.toISO(),
       singleEvents: true,
       orderBy: "startTime",
     });
     const events = response.data.items;
+    console.log(`[getSchedule] schedule data received: ${events.length}`);
     const mappedEvents = events.map((event, i) => {
       // const start = event.start.dateTime || event.start.date;
       return {
@@ -27,7 +35,7 @@ const getSchedule = async (req, res) => {
       };
     });
     res.json(mappedEvents);
-    console.log("[getSchedule] schedule data sent");
+    console.log("[getSchedule] schedule data received");
   } catch (err) {
     // throw new UnAuthenticatedError(err.message);
     console.error(`[getSchedule] ${err.message}`);
@@ -125,58 +133,36 @@ const splitEvent = (event) => {
   return splittedEvent;
 };
 
-// const event = {
-//   'summary': 'Google I/O 2015',
-//   'location': '800 Howard St., San Francisco, CA 94103',
-//   'description': 'A chance to hear more about Google\'s developer products.',
-//   'start': {
-//     'dateTime': '2015-05-28T09:00:00-07:00',
-//     'timeZone': 'America/Los_Angeles',
-//   },
-//   'end': {
-//     'dateTime': '2015-05-28T17:00:00-07:00',
-//     'timeZone': 'America/Los_Angeles',
-//   },
-//   'recurrence': [
-//     'RRULE:FREQ=DAILY;COUNT=2'
-//   ],
-//   'attendees': [
-//     {'email': 'lpage@example.com'},
-//     {'email': 'sbrin@example.com'},
-//   ],
-//   'reminders': {
-//     'useDefault': false,
-//     'overrides': [
-//       {'method': 'email', 'minutes': 24 * 60},
-//       {'method': 'popup', 'minutes': 10},
-//     ],
-//   },
-// };
+const scheduleEvent = async (origEvent, client) => {
+  const scheduler = new Scheduler(origEvent, client);
+  scheduler.buildAllTimeslots();
+  console.log();
+  console.log(scheduler.availableTimeslots);
+  await scheduler.buildEventTimeslots();
+  console.log(scheduler.eventTimeslots);
+  scheduler.buildAvailableTimeslots();
+  console.log(scheduler.availableTimeslots);
+  scheduler.splitEvent();
+  console.log(scheduler.newEventTimeslots);
+  scheduler.setEventTimeslots();
+  console.log(scheduler.newEventTimeslots);
+  console.log(scheduler.availableTimeslots);
+  scheduler.buildNewEvents();
+  console.log(scheduler.newEvents);
+  return scheduler.newEvents;
+};
 
-const createEvent = (req, res) => {
+const createEvent = async (req, res) => {
   console.log("[createEvent] create a new event requested");
   // logic here
   // console.log(req.body);
-  const events = splitEvent(req.body);
-  console.log(events.length);
-  const googleEvent = buildGoogleEvent(req.body);
-  // console.log(googleEvent);
-  // const calendar = google.calendar({ version: "v3", auth: oauth2Client });
-  // calendar.events.insert(
-  //   {
-  //     calendarId: "primary",
-  //     resource: googleEvent,
-  //   },
-  //   function (err, event) {
-  //     if (err) {
-  //       console.log(
-  //         "There was an error contacting the Calendar service: " + err
-  //       );
-  //       return;
-  //     }
-  //     console.log("Event created: %s", event.htmlLink);
-  //   }
-  // );
+  const origEvent = req.body;
+  const events = await scheduleEvent(origEvent, {
+    type: "google",
+    oauth2Client,
+  });
+  const googleClient = new GoogleApiClient(oauth2Client);
+  await googleClient.insertEvents(events);
   console.log("[createEvent] new event created");
   res.status(StatusCodes.CREATED).json({ message: "event created" });
 };

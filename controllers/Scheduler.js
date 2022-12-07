@@ -1,7 +1,10 @@
 const { DateTime } = require("luxon");
 const { DateHelper } = require("../helper/DateTime");
-const GoogleApiClient = require("./google-api-controller");
+const GoogleApiClient = require("./google-api-client");
 const { oauth2Client } = require("./auth-controller");
+const validate = require("../models/SchemaValidate");
+const Event = require("../models/Event");
+const logger = require("../utils/logger")("Scheduler");
 
 const defaultConfig = {
   hour: {
@@ -38,7 +41,7 @@ class Scheduler {
     }
 
     this._event = this.format(event);
-    this._googleEvent = this._startDT = "";
+    this._startDT = "";
     this._endDT = "";
 
     this._availTimeslots = [];
@@ -76,6 +79,32 @@ class Scheduler {
       duration: this._dateHelper.duration,
       interval: this._dateHelper.interval,
     };
+  }
+
+  static validate(event) {
+    return validate(Event, event);
+  }
+
+  async scheduleEvent() {
+    logger.info(`[scheduleEvent] schedule event started`);
+    this.buildAllTimeslots();
+    logger.debug(`[scheduleEvent] Total available timeslots:`);
+    logger.debug(this.availableTimeslots);
+    await this.buildEventTimeslots();
+    logger.debug(`[scheduleEvent] Event timeslots`);
+    logger.debug(this.eventTimeslots);
+    this.buildAvailableTimeslots();
+    logger.debug(`[scheduleEvent] Actual available timeslots`);
+    logger.debug(this.availableTimeslots);
+    this.splitEvent();
+    this.setEventTimeslots();
+    logger.debug(`[scheduleEvent] Scheduled timeslots for the new event`);
+    logger.debug(this.newEventTimeslots);
+    this.buildNewEvents();
+    logger.debug(`[scheduleEvent] Events to be inserted to calendar`);
+    logger.debug(this.newEvents);
+    logger.info(`[scheduleEvent] schedule event ended`);
+    return this.newEvents;
   }
 
   format(event) {
@@ -126,9 +155,17 @@ class Scheduler {
   }
 
   buildAllTimeslots() {
+    logger.info(`[buildAllTimeslots] building all timeslot started`);
     const startDate = this._event.startDT;
     const startHour = this._availConfig.hour.total.start;
     const endHour = this._availConfig.hour.total.end;
+    logger.debug(
+      `Total available timeslots on ${
+        startDate || "<missing startDate>"
+      } from ${startHour || "<missing startHour>"} to ${
+        endHour || "<missing endHour>"
+      }`
+    );
 
     let nextDate = startDate;
     for (let i = 1; i <= this._event.diffInDaysMax; i++) {
@@ -155,9 +192,14 @@ class Scheduler {
       });
       nextDate = startDate.plus({ day: i });
     }
+    logger.debug(
+      `Total available timeslots: ${this.availableTimeslots.length}`
+    );
+    logger.info(`[buildAllTimeslots] building all timeslot ended`);
   }
 
   async buildEventTimeslots() {
+    logger.info(`[buildEventTimeslots] building event timeslots started`);
     this._eventTimeslots =
       await this._calendarClient.listEventsBetweenDateTimes(
         this._startDT,
@@ -169,6 +211,7 @@ class Scheduler {
           end: e?.end?.dateTime,
         })
       );
+    logger.info(`[buildEventTimeslots] building event timeslots ended`);
   }
 
   /**
@@ -196,6 +239,9 @@ class Scheduler {
    * ```
    */
   filterAvailableTimeslots(availTimeslots, eventTimeslots) {
+    logger.info(
+      `[filterAvailableTimeslots] filtering available timeslots started`
+    );
     if (!availTimeslots) {
       throw new Error(
         `[Scheduler][filterAvailableTimeslots] missing available timeslots`
@@ -247,17 +293,23 @@ class Scheduler {
         }
       });
     });
+    logger.info(
+      `[filterAvailableTimeslots] filtering available timeslots ended`
+    );
     return availTimeslotsCopy;
   }
 
   sortTimeslots(timeslots) {
+    logger.info(`[sortTimeslots] sort timeslots started`);
     timeslots.sort((timeslotA, timeslotB) => {
       this.helper.dateTime.fromISO(timeslotA.start) <
         this.helper.dateTime.fromISO(timeslotB.start);
     });
+    logger.info(`[sortTimeslots] sort timeslots ended`);
   }
 
   buildAvailableTimeslots() {
+    logger.info(`[buildAvailableTimeslots] build available timeslots started`);
     const availTimeslots = this._availTimeslots;
     const eventTimeslots = this._eventTimeslots;
     this._availTimeslots = this.filterAvailableTimeslots(
@@ -265,9 +317,11 @@ class Scheduler {
       eventTimeslots
     );
     this.sortTimeslots(this._availTimeslots);
+    logger.info(`[buildAvailableTimeslots] build available timeslots ended`);
   }
 
   splitEvent() {
+    logger.info(`[splitEvent] split event started`);
     const event = this._event;
     const splittedEvent = this._newEventTimeslots;
     // convert to durations
@@ -285,10 +339,12 @@ class Scheduler {
       this._event,
       eventCount
     );
+    logger.info(`[splitEvent] split event ended`);
     return this._newEventTimeslots;
   }
 
   static buildSplitEvents(event, count) {
+    logger.info(`[buildSplitEvents] build split events started`);
     const splitEvents = [];
     const summary = event?.summary;
     for (let i = 0; i < count; i++) {
@@ -299,10 +355,12 @@ class Scheduler {
       };
       splitEvents.push(splitEvent);
     }
+    logger.info(`[buildSplitEvents] build split events ended`);
     return splitEvents;
   }
 
   setSingleEvent(event) {
+    logger.info(`[setSingleEvent] set single event started`);
     const availTimeslots = this._availTimeslots;
     let eventSplitDuration = this.event.splitDurObj;
 
@@ -321,8 +379,8 @@ class Scheduler {
       );
 
       if (this.helper.interval.canIntervalFit(availInterval, eventInterval)) {
-        console.log(
-          `[Scheduler][setSingleEvent] event '${
+        logger.debug(
+          `event '${
             event.subject
           }' can be book from ${eventInterval.start.toISO()} to ${eventInterval.end.toISO()}`
         );
@@ -333,9 +391,8 @@ class Scheduler {
 
     // if there is no available timeslot where the event can fit
     if (eventAvailTimeslotPos === -1) {
-      console.warn(
-        `[Scheduler][setSingleEvent] event '${event.subject}' can't be book on any timeslot`
-      );
+      logger.debug(`event '${event.subject}' can't be book on any timeslot`);
+      logger.warn(`[setSingleEvent] no available timeslot to book`);
       return;
     }
 
@@ -345,6 +402,7 @@ class Scheduler {
       .plus(eventSplitDuration)
       .toISO();
 
+    logger.info(`[setSingleEvent] set single event ended`);
     return {
       availableTimeslot: availTimeslots[eventAvailTimeslotPos],
       bookedTimeslot: {
@@ -355,6 +413,9 @@ class Scheduler {
   }
 
   updateAvailableTimeslots(availTimeslot, bookedTimeslot) {
+    logger.info(
+      `[updateAvailableTimeslots] update available timeslots started`
+    );
     const availTimeslots = this._availTimeslots;
 
     const timeslotPos = availTimeslots.findIndex((ts) => {
@@ -371,17 +432,17 @@ class Scheduler {
     } else {
       availTimeslots[timeslotPos] = newAvailTimeslot.pop();
     }
+    logger.info(`[updateAvailableTimeslots] update available timeslots ended`);
   }
 
   setEventTimeslots() {
+    logger.info(`[setEventTimeslots] set event timeslots started`);
     // const availTimeslots = this._availTimeslots;
     const events = this._newEventTimeslots;
     this._newEventTimeslots = events.map((event, i) => {
       const { availableTimeslot, bookedTimeslot } = this.setSingleEvent(event);
       if (!bookedTimeslot) {
-        console.warn(
-          `[Scheduler][setEventTimeslots] no available timeslot for the event`
-        );
+        logger.warn(`[setEventTimeslots] no available timeslot for the event`);
         return;
       } else {
         // NOTE we need this update available timeslot because we are currently drafting
@@ -393,15 +454,18 @@ class Scheduler {
         ...bookedTimeslot,
       };
     });
+    logger.info(`[setEventTimeslots] set event timeslots ended`);
     return this._newEventTimeslots;
   }
 
   buildNewEvents() {
+    logger.info(`[buildNewEvents] build new events started`);
     const eventDetails = this._event;
     const newEventTimeslots = this._newEventTimeslots;
     this._newEvents = newEventTimeslots.map((eventTimeslot) =>
       GoogleApiClient.buildGoogleEvent(eventTimeslot, eventDetails)
     );
+    logger.info(`[buildNewEvents] build new events ended`);
   }
 }
 

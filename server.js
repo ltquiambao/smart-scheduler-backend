@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const morgan = require("morgan");
+const helmet = require("helmet");
+require("express-async-errors");
 
 dotenv.config();
 const app = express();
@@ -25,10 +27,11 @@ if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
 }
 
-app.use(cors(corsOptions));
+app.use(cors({ credentials: true, origin: true }));
 
 // parse requests of content-type - application/json
 app.use(express.json());
+app.use(helmet());
 
 // parse requests of content-type - application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: true }));
